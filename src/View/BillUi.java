@@ -1,222 +1,244 @@
 package View;
 
+import Model.Bill;
+import Model.Customer;
 import Model.Product;
-import Services.ProductServices;
+import Services.BillServices;
 
 import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableCellRenderer;
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.text.DecimalFormat;
 import java.util.List;
+import java.util.Map;
 
-class ProductUI extends JFrame {
-    private ProductServices productServices;
-    private JTextField idField, nameField, priceField, stockField;
-    private JTable productTable;
+class BillUI extends JFrame {
+    private final BillServices billService;
+    private String currentDraftId;
+    private Customer currentCustomer;
+
+    // Componentes UI
+    private JTextField txtCustomerName;
+    private JCheckBox chkFrequentCustomer;
+    private JTextField txtDiscount;
+    private JTextField txtSearchProduct;
+    private JTable tblProducts;
     private DefaultTableModel tableModel;
-    private JButton addButton, editButton, deleteButton, clearButton;
+    private JLabel lblSubtotal;
+    private JLabel lblDiscount;
+    private JLabel lblTax;
+    private JLabel lblTotal;
+    private final DecimalFormat formatter = new DecimalFormat("#,##0.00");
 
-    public ProductUI() {
-        productServices = new ProductServices();
+    public BillUI() {
+        billService = new BillServices();
         initializeComponents();
-        setupLayout();
-        setupEventListeners();
-        refreshProductTable();
     }
 
     private void initializeComponents() {
-        // Modern, clean font
-        Font defaultFont = new Font("Segoe UI", Font.PLAIN, 14);
-
-        // Set up input fields with modern styling
-        idField = createStyledTextField();
-        nameField = createStyledTextField();
-        priceField = createStyledTextField();
-        stockField = createStyledTextField();
-
-        // Create table with modern look
-        String[] columnNames = {"ID", "Name", "Price", "Stock"};
-        tableModel = new DefaultTableModel(columnNames, 0);
-        productTable = new JTable(tableModel);
-        productTable.setFont(defaultFont);
-        productTable.setRowHeight(25);
-        productTable.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 14));
-
-        // Styled buttons
-        addButton = createStyledButton("Add Product", Color.GREEN.darker());
-        editButton = createStyledButton("Edit Product", Color.ORANGE.darker());
-        deleteButton = createStyledButton("Delete Product", Color.RED.darker());
-        clearButton = createStyledButton("Clear", Color.BLUE.darker());
-    }
-
-    private void setupLayout() {
-        setTitle("Modern Product Management");
-        setSize(700, 500);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setTitle("Sistema de Facturación");
+        setSize(1000, 700);
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLayout(new BorderLayout(10, 10));
+        setBackground(new Color(245, 245, 245)); // Fondo claro
 
-        // Input Panel
-        JPanel inputPanel = new JPanel(new GridLayout(4, 2, 10, 10));
-        inputPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        inputPanel.add(new JLabel("Product ID:"));
-        inputPanel.add(idField);
-        inputPanel.add(new JLabel("Name:"));
-        inputPanel.add(nameField);
-        inputPanel.add(new JLabel("Price:"));
-        inputPanel.add(priceField);
-        inputPanel.add(new JLabel("Stock:"));
-        inputPanel.add(stockField);
+        // Panel Superior - Datos del Cliente
+        JPanel customerPanel = new JPanel(new GridLayout(4, 2, 10, 10));
+        customerPanel.setBorder(BorderFactory.createTitledBorder(
+                BorderFactory.createLineBorder(Color.GRAY), "Datos del Cliente"));
+        customerPanel.setBackground(new Color(250, 250, 250));
 
-        // Button Panel
-        JPanel buttonPanel = new JPanel(new GridLayout(1, 4, 10, 10));
-        buttonPanel.setBorder(BorderFactory.createEmptyBorder(20, 10, 20, 10)); // Added vertical padding
-        buttonPanel.add(addButton);
-        buttonPanel.add(editButton);
-        buttonPanel.add(deleteButton);
-        buttonPanel.add(clearButton);
+        // Nombre del cliente
+        customerPanel.add(createStyledLabel("Nombre:", Color.DARK_GRAY));
+        txtCustomerName = createStyledTextField();
+        customerPanel.add(txtCustomerName);
 
-        // Table Panel
-        JScrollPane tableScrollPane = new JScrollPane(productTable);
+        // Cliente frecuente
+        customerPanel.add(createStyledLabel("Cliente Frecuente:", Color.DARK_GRAY));
+        chkFrequentCustomer = new JCheckBox("Cliente Frecuente");
+        chkFrequentCustomer.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        chkFrequentCustomer.setForeground(Color.DARK_GRAY);
+        chkFrequentCustomer.setBackground(new Color(250, 250, 250));
+        customerPanel.add(chkFrequentCustomer);
 
-        // Add components to frame
-        add(inputPanel, BorderLayout.NORTH);
-        add(tableScrollPane, BorderLayout.CENTER);
-        add(buttonPanel, BorderLayout.SOUTH);
+        // Descuento
+        customerPanel.add(createStyledLabel("Descuento (%):", Color.DARK_GRAY));
+        txtDiscount = createStyledTextField();
+        txtDiscount.setText("0.0");
+        customerPanel.add(txtDiscount);
+
+        // Botones
+        JPanel buttonPanel = new JPanel(new GridLayout(1, 3, 10, 10));
+        buttonPanel.setBackground(new Color(250, 250, 250));
+
+        JButton btnStartDraft = createStyledButton("Iniciar Factura", new Color(46, 204, 113), e -> startNewDraft(e));
+        JButton btnSelectCustomer = createStyledButton("Seleccionar Cliente", new Color(52, 152, 219), e -> selectExistingCustomer());
+        JButton btnSearchProduct = createStyledButton("Buscar Producto", new Color(241, 196, 15), e -> showProductSelectionDialog());
+
+        buttonPanel.add(btnStartDraft);
+        buttonPanel.add(btnSelectCustomer);
+        buttonPanel.add(btnSearchProduct);
+
+        customerPanel.add(buttonPanel);
+        add(customerPanel, BorderLayout.NORTH);
+
+        // Panel de Búsqueda de Productos
+        JPanel searchPanel = new JPanel(new BorderLayout(10, 10));
+        searchPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        searchPanel.setBackground(new Color(245, 245, 245));
+
+        txtSearchProduct = createStyledTextField();
+        txtSearchProduct.getDocument().addDocumentListener(new DocumentListener() {
+            public void insertUpdate(DocumentEvent e) { filterProducts(); }
+            public void removeUpdate(DocumentEvent e) { filterProducts(); }
+            public void changedUpdate(DocumentEvent e) { filterProducts(); }
+        });
+
+        searchPanel.add(createStyledLabel("Buscar Producto:", Color.DARK_GRAY), BorderLayout.WEST);
+        searchPanel.add(txtSearchProduct, BorderLayout.CENTER);
+        add(searchPanel, BorderLayout.CENTER);
+
+        // Tabla de Productos
+        tableModel = new DefaultTableModel(new Object[]{"Código", "Nombre", "Precio", "Precio + IVA"}, 0);
+        tblProducts = new JTable(tableModel) {
+            @Override
+            public Component prepareRenderer(TableCellRenderer renderer, int row, int column) {
+                Component c = super.prepareRenderer(renderer, row, column);
+                c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(240, 240, 240));
+                c.setForeground(Color.DARK_GRAY);
+                return c;
+            }
+        };
+        tblProducts.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        tblProducts.setRowHeight(30);
+        JScrollPane scrollPane = new JScrollPane(tblProducts);
+        scrollPane.setBorder(BorderFactory.createEmptyBorder());
+        add(scrollPane, BorderLayout.SOUTH);
+
+        // Panel de Totales
+        JPanel totalsPanel = new JPanel(new GridLayout(4, 2, 5, 5));
+        totalsPanel.setBorder(BorderFactory.createTitledBorder("Totales"));
+        totalsPanel.setBackground(new Color(250, 250, 250));
+
+        String[] totalLabels = {"Subtotal:", "Descuento:", "IVA:", "Total:"};
+        JLabel[] totalValueLabels = {lblSubtotal, lblDiscount, lblTax, lblTotal};
+
+        for (int i = 0; i < totalLabels.length; i++) {
+            JLabel label = createStyledLabel(totalLabels[i], Color.DARK_GRAY);
+            totalValueLabels[i] = createStyledLabel("0.00", Color.DARK_GRAY);
+            totalsPanel.add(label);
+            totalsPanel.add(totalValueLabels[i]);
+        }
+
+        lblSubtotal = totalValueLabels[0];
+        lblDiscount = totalValueLabels[1];
+        lblTax = totalValueLabels[2];
+        lblTotal = totalValueLabels[3];
+
+        add(totalsPanel, BorderLayout.EAST);
     }
 
-    private void setupEventListeners() {
-        addButton.addActionListener(e -> addProduct());
-        editButton.addActionListener(e -> editProduct());
-        deleteButton.addActionListener(e -> deleteProduct());
-        clearButton.addActionListener(e -> clearFields());
-
-        // Add table row selection listener
-        productTable.getSelectionModel().addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting() && productTable.getSelectedRow() != -1) {
-                int selectedRow = productTable.getSelectedRow();
-                idField.setText(productTable.getValueAt(selectedRow, 0).toString());
-                nameField.setText(productTable.getValueAt(selectedRow, 1).toString());
-                priceField.setText(productTable.getValueAt(selectedRow, 2).toString());
-                stockField.setText(productTable.getValueAt(selectedRow, 3).toString());
-            }
-        });
+    // Métodos de estilo (similares a los de CustomerUI)
+    private JLabel createStyledLabel(String text, Color color) {
+        JLabel label = new JLabel(text);
+        label.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        label.setForeground(color);
+        return label;
     }
 
     private JTextField createStyledTextField() {
         JTextField textField = new JTextField();
         textField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         textField.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Color.GRAY),
-                BorderFactory.createEmptyBorder(5, 5, 5, 5)
+                BorderFactory.createLineBorder(new Color(200, 200, 200)),
+                BorderFactory.createEmptyBorder(5, 10, 5, 10)
         ));
+        textField.setBackground(Color.WHITE);
         return textField;
     }
 
-    private JButton createStyledButton(String text, Color color) {
-        JButton button = new JButton(text);
-        button.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        button.setForeground(Color.WHITE);
-        button.setBackground(color);
-        button.setFocusPainted(false);
-        button.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
-        return button;
-    }
+    private JButton createStyledButton(String text, Color bgColor, ActionListener listener ) {
+        JButton btn = new JButton(text) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-    private void addProduct() {
-        try {
-            int id = Integer.parseInt(idField.getText());
-            String name = nameField.getText();
-            double price = Double.parseDouble(priceField.getText());
-            int stock = Integer.parseInt(stockField.getText());
+                // Sombra
+                g2d.setColor(new Color(0, 0, 0, 50));
+                g2d.fillRoundRect(3, 3, getWidth() - 6, getHeight() - 6, 30, 30);
 
-            Product product = new Product(id, name, price, stock);
-            productServices.addProduct(product);
-            refreshProductTable();
-            clearFields();
-            showMessage("Product added successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
-        } catch (NumberFormatException ex) {
-            showMessage("Invalid input! Please check your entries.", "Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
+                // Fondo
+                g2d.setColor(bgColor);
+                g2d.fillRoundRect(0, 0, getWidth() - 3, getHeight() - 3, 30, 30);
 
-    private void editProduct() {
-        try {
-            int id = Integer.parseInt(idField.getText());
-            String name = nameField.getText();
-            double price = Double.parseDouble(priceField.getText());
-            int stock = Integer.parseInt(stockField.getText());
-
-            Product newProduct = new Product(id, name, price, stock);
-            boolean success = productServices.editarProduct(id, newProduct);
-
-            if (success) {
-                refreshProductTable();
-                clearFields();
-                showMessage("Product updated successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
-            } else {
-                showMessage("Product not found!", "Error", JOptionPane.ERROR_MESSAGE);
+                g2d.dispose();
+                super.paintComponent(g);
             }
-        } catch (NumberFormatException ex) {
-            showMessage("Invalid input! Please check your entries.", "Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
+        };
 
-    private void deleteProduct() {
-        try {
-            int id = Integer.parseInt(idField.getText());
-            boolean success = productServices.deleteProduct(id);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        btn.setForeground(Color.WHITE);
+        btn.setContentAreaFilled(false);
+        btn.setBorderPainted(false);
+        btn.setFocusPainted(false);
+        btn.addActionListener(listener);
 
-            if (success) {
-                refreshProductTable();
-                clearFields();
-                showMessage("Product deleted successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
-            } else {
-                showMessage("Product not found!", "Error", JOptionPane.ERROR_MESSAGE);
+        // Animación de hover
+        btn.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+                btn.setBackground(bgColor.darker());
             }
-        } catch (NumberFormatException ex) {
-            showMessage("Invalid input! Please check your entries.", "Error", JOptionPane.ERROR_MESSAGE);
+
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                btn.setBackground(bgColor);
+            }
+        });
+
+        return btn;
+    }
+
+    private void startNewDraft(ActionEvent event) {
+        currentDraftId = billService.startNewDraft(currentCustomer);
+        updateTotals();
+    }
+
+    private void selectExistingCustomer() {
+        // Lógica para seleccionar un cliente existente
+    }
+
+    private void showProductSelectionDialog() {
+        // Lógica para mostrar un diálogo de selección de productos
+    }
+
+    private void filterProducts() {
+        String searchTerm = txtSearchProduct.getText().toLowerCase();
+        tableModel.setRowCount(0); // Limpiar la tabla
+
+        for (Product product : billService.getAllProducts()) {
+            if (product.getName().toLowerCase().contains(searchTerm)) {
+                tableModel.addRow(new Object[]{product.getId(), product.getName(), product.getPrice(), billService.getProductPriceWithTax(product)});
+            }
         }
     }
 
-    private void refreshProductTable() {
-        // Clear existing rows
-        tableModel.setRowCount(0);
-
-        // Fetch and populate products
-        List<Product> products = productServices.listaProducts();
-        for (Product product : products) {
-            tableModel.addRow(new Object[]{
-                    product.getId(),
-                    product.getName(),
-                    String.format("$%.2f", product.getPrice()),
-                    product.getStock()
-            });
-        }
-    }
-
-    private void clearFields() {
-        idField.setText("");
-        nameField.setText("");
-        priceField.setText("");
-        stockField.setText("");
-        productTable.clearSelection();
-    }
-
-    private void showMessage(String message, String title, int messageType) {
-        JOptionPane.showMessageDialog(this, message, title, messageType);
+    private void updateTotals() {
+        Map<String, Double> details = billService.getDraftPriceDetails(currentDraftId);
+        lblSubtotal.setText(formatter.format(details.get("subtotal")));
+        lblDiscount.setText(formatter.format(details.get("discount")));
+        lblTax.setText(formatter.format(details.get("tax")));
+        lblTotal.setText(formatter.format(details.get("total")));
     }
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            try {
-                // Cross-platform look and feel that works consistently
-                UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
-            } catch (Exception e) {
-                // Fallback to default if setting look and feel fails
-                e.printStackTrace();
-            }
-
-            ProductUI ui = new ProductUI();
-            ui.setLocationRelativeTo(null); // Center on screen
+            BillUI ui = new BillUI();
             ui.setVisible(true);
         });
     }

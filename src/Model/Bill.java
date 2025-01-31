@@ -3,9 +3,9 @@ import java.util.List;
 
 public class Bill {
 
-    private int numBill;
-    private Customer customer;
-    private List<Product> products;
+    private final int numBill;
+    private final Customer customer;
+    private final List<Product> products;
     private double total;
     private double tax;
     private double totalWhitTax;
@@ -26,5 +26,8 @@ public class Bill {
         totalWhitTax = total + tax;
     }
 
+    public int getNumBill(){
+        return numBill;
+    }
 
 }

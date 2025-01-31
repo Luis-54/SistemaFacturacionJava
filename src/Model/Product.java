@@ -1,54 +1,46 @@
 package Model;
 
 public class Product {
-
-    //Atributos o Variable
-    private static int id = 0;
-    public String name;
+    private static int nextId = 1; // Variable estática para generar IDs incrementales
+    private final int id; // ID único del producto
+    private String name;
     private double price;
     private int stock;
 
-
-    // Constructores
-
-    public Product(int id, String name, double price, int stock){
-        this.id = ++id;
+    // Constructor
+    public Product(String name, double price, int stock) {
+        this.id = nextId++; // Asignar y aumentar el ID
         this.name = name;
         this.price = price;
         this.stock = stock;
     }
 
-    public void add(Product product) {
-    }
-
-    public int getId(){
+    // Métodos getters y setters
+    public int getId() {
         return id;
     }
 
-    public String getName(){
+    public String getName() {
         return name;
     }
 
-    public String setName(String name){
-        return name;
+    public void setName(String name) {
+        this.name = name;
     }
 
-    public double getPrice(){
+    public double getPrice() {
         return price;
     }
 
-    public double setPrice( double price){
-        return price;
+    public void setPrice(double price) {
+        this.price = price;
     }
 
-    public int getStock(){
+    public int getStock() {
         return stock;
     }
 
-    public int setStock(int stock){
-        return stock;
+    public void setStock(int stock) {
+        this.stock = stock;
     }
-
-
-
 }
